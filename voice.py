@@ -19,7 +19,7 @@ def call(profile,request):
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--profile',required=True)
  s=p.add_subparsers(dest='action',required=True);s.add_parser('status')
- a=s.add_parser('add');a.add_argument('name');a.add_argument('session')
+ a=s.add_parser('add');a.add_argument('name');a.add_argument('session');a.add_argument('--voice',required=True)
  a=s.add_parser('switch');a.add_argument('name')
  a=s.add_parser('reply');a.add_argument('turn')
  a=p.parse_args();request=vars(a).copy();profile=request.pop('profile')

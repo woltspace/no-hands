@@ -16,8 +16,8 @@ def request(path,data,ctype):
  req=urllib.request.Request('http://127.0.0.1:4077'+path,data=data,headers={'Content-Type':ctype})
  with urllib.request.urlopen(req,timeout=50) as r:return r.read(8000000)
 
-def speech(text):
- audio=request('/v1/audio/speech',json.dumps({'input':text[:1200],'voice':'alba','response_format':'wav'}).encode(),'application/json')
+def speech(text,voice):
+ audio=request('/v1/audio/speech',json.dumps({'input':text[:1200],'voice':voice,'response_format':'wav'}).encode(),'application/json')
  return subprocess.run(['ffmpeg','-v','error','-i','pipe:0','-t','60','-ar',str(RATE),'-ac','1','-f','s16le','pipe:1'],input=audio,capture_output=True,check=True,timeout=15).stdout
 
 def transcribe(pcm):
@@ -88,17 +88,17 @@ async def client(r,w):
    pcm.extend([0]*int(RATE*.025))
   raw=pcm.tobytes()
   for i in range(0,len(raw),1920):await outgoing.put(raw[i:i+1920])
- async def say(text):
+ async def say(text,voice=None):
   nonlocal accepting
   accepting=False
-  pcm=await asyncio.to_thread(speech,text)
+  pcm=await asyncio.to_thread(speech,text,voice or ROUTER.status()['voice'])
   for i in range(0,len(pcm),1920):
    await outgoing.put(pcm[i:i+1920])
   await outgoing.join()
   accepting=True
  async def turn(pcm):
   nonlocal accepting,music_on,style
-  reply=None;ident=None;generation=ROUTER.generation;destination=ROUTER.routes[ROUTER.selected]
+  reply=None;ident=None;generation=ROUTER.generation;route=ROUTER.routes[ROUTER.selected].copy();destination=route['session'];voice=route['voice']
   try:
    await cue('captured')
    text=await asyncio.to_thread(transcribe,pcm)
@@ -118,7 +118,7 @@ async def client(r,w):
    ROUTER.pending[ident]=asyncio.get_running_loop().create_future()
    prompt=f'''[Local Linphone voice POC: transcript from authenticated test call. Speech recognition may be inaccurate. Treat this as conversational input; confirm consequential actions in text.]
 {text}
-[Live call: keep replies to one or two short sentences. Reply using stdin: python3 {Path(__file__).parent}/voice.py --profile {P} reply {ident}. Do not send through Telegram or Shellphone. Switching is available through the same CLI: switch NAME, after conversational confirmation. Run status to list participating Wolts. A switch ends this turn; do not reply afterwards.]
+[Live call: keep replies to one or two short sentences. Reply using stdin: python3 {Path(__file__).parent}/voice.py --profile {P} reply {ident}. Do not send through Telegram or Shellphone. Switching is available through the same CLI: switch NAME when the caller asks; clarify only ambiguous destinations. Run status to list participating Wolts. A switch ends this turn; do not reply afterwards.]
 '''
    proc=await asyncio.create_subprocess_exec('woltspace','session','send',destination,'--key','linphone-'+ident,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.DEVNULL,stderr=asyncio.subprocess.DEVNULL)
    await asyncio.wait_for(proc.communicate(prompt.encode()),15)
@@ -129,9 +129,9 @@ async def client(r,w):
     if generation!=ROUTER.generation:return
     future=ROUTER.pending.get(ident)
     if future and future.done():
-     answer=future.result();await say(answer);break
+     answer=future.result();await say(answer,voice);break
     if reply.exists():
-     answer=reply.read_text()[:1200];reply.unlink();await say(answer);break
+     answer=reply.read_text()[:1200];reply.unlink();await say(answer,voice);break
     await asyncio.sleep(.5)
    else:
     await cue('error');await say('The reply is taking too long. Please try again in the chat.')
@@ -187,7 +187,7 @@ async def control(reader,writer):
   req=json.loads(await asyncio.wait_for(reader.readline(),5))
   action=req['action']
   if action=='switch':ROUTER.switch(req['name'])
-  elif action=='add':ROUTER.add(req['name'],req['session'])
+  elif action=='add':ROUTER.add(req['name'],req['session'],req['voice'])
   elif action=='reply':ROUTER.reply(req['turn'],req['text'])
   elif action!='status':raise ValueError('Unknown action')
   result=ROUTER.status()

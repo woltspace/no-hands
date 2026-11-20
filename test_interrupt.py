@@ -7,7 +7,7 @@ setup.ROOT=Path(tmp.name)
 p=setup.initialize('test','100.64.0.1','100.64.0.2','test-session')
 os.environ['VOICE_PROFILE']=str(p)
 s=importlib.util.spec_from_file_location('bridge',Path(__file__).parent/'bridge.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
-m.speech=lambda text:struct.pack('<h',5000)*(m.RATE*5)
+m.speech=lambda text,voice:struct.pack('<h',5000)*(m.RATE*5)
 seen=[]
 def transcribe(pcm):seen.append(pcm);return 'stop'
 m.transcribe=transcribe

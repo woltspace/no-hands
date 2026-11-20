@@ -7,7 +7,7 @@ setup.ROOT=Path(tmp.name)
 p=setup.initialize('test','100.64.0.1','100.64.0.2','test-session')
 os.environ['VOICE_PROFILE']=str(p)
 s=importlib.util.spec_from_file_location('bridge',Path(__file__).parent/'bridge.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
-m.speech=lambda text:struct.pack('<h',5000)*(m.RATE*5)
+m.speech=lambda text,voice:struct.pack('<h',5000)*(m.RATE*5)
 seen=[]
 def transcribe(pcm):seen.append(pcm);return 'stop'
 m.transcribe=transcribe
@@ -26,7 +26,7 @@ async def test():
   except (asyncio.IncompleteReadError,ConnectionError):pass
  reader=asyncio.create_task(read());await asyncio.sleep(.15)
  assert any(x>4000 for x in received)
- await asyncio.to_thread(call,p,{'action':'add','name':'other','session':'verified-test-session'})
+ await asyncio.to_thread(call,p,{'action':'add','name':'other','session':'verified-test-session','voice':'marius'})
  old=asyncio.get_running_loop().create_future();m.ROUTER.pending['old']=old
  result=await asyncio.to_thread(call,p,{'action':'switch','name':'other'})
  assert result['session']=='verified-test-session' and old.cancelled()

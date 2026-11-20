@@ -7,10 +7,11 @@ import json
 class RoutingTest(unittest.IsolatedAsyncioTestCase):
  async def test_switch_fences_old_reply_and_persists_members(self):
   with tempfile.TemporaryDirectory() as d:
-   r=Router(d,'astre-session');r.add('softie','softie-session')
+   r=Router(d,'astre-session');r.add('softie','softie-session','marius')
    old=asyncio.get_running_loop().create_future();r.pending['old']=old
    r.switch('softie')
    self.assertTrue(old.cancelled())
+   self.assertEqual(r.status()['voice'],'marius')
    with self.assertRaises(ValueError):r.reply('old','late')
    new=asyncio.get_running_loop().create_future();r.pending['new']=new
    r.reply('new','hello');self.assertEqual(new.result(),'hello')
@@ -18,6 +19,6 @@ class RoutingTest(unittest.IsolatedAsyncioTestCase):
    before=r.status()
    with self.assertRaises(ValueError):r.switch('missing')
    self.assertEqual(before,r.status())
-   self.assertEqual(Router(d,'ignored').routes['softie'],'softie-session')
+   self.assertEqual(Router(d,'ignored').routes['softie']['session'],'softie-session')
 
 if __name__=='__main__':unittest.main()

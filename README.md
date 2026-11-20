@@ -2,7 +2,7 @@
 
 Call your AI while walking.
 
-An experimental hands-free voice bridge for Wolt sessions. Initial MVP: two participating Wolts on one phone call, with spoken switching and distinct voices. This checkpoint includes CLI switching; per-route voices, spoken switching, reachability checks and real two-Wolt phone validation remain follow-up work. It is not a one-click installer.
+An experimental hands-free voice bridge for Wolt sessions. Initial MVP: two participating Wolts on one phone call, with spoken switching and distinct voices. This checkpoint includes CLI switching; per-route voices are supported. Switching is performed by the Wolt via the CLI when asked; real two-Wolt phone validation remains. It is not a one-click installer.
 
 ## What works
 - Linphone call → Tailscale → Asterisk → local WOCAL ASR → existing Wolt session → local WOCAL TTS → call.
@@ -109,7 +109,7 @@ The single caller stays connected while the selected destination changes. `routi
 
 ```sh
 python3 voice.py --profile runtime/personal status
-python3 voice.py --profile runtime/personal add softie VERIFIED_SESSION_ID
+python3 voice.py --profile runtime/personal add softie VERIFIED_SESSION_ID --voice marius
 python3 voice.py --profile runtime/personal switch softie
 ```
 

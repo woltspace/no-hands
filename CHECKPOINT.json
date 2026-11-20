@@ -1,18 +1,18 @@
 {
-  "status": "initial source checkpoint; phone MVP incomplete",
+  "status": "per-route voices validated; real two-Wolt phone test pending",
   "files": {
     "test_setup.py": "eee1a4cdc52865597fa59f31012c6cb3bec7dc95e3bddfeeeee416f3c1572ef0",
     "Dockerfile": "119591b09a07dc547e9315fc96e9a4297b653f2164c7b87d25c74bb738720e60",
-    "bridge.py": "75905eb81dac1e2658ed341906ae4ac21473b4dd0e24d8c97069432b2e93b610",
-    "README.md": "177f704aa0cd3a5f599c45304822a0cd2b7a28b2eff2eb548231c4aa95a7f184",
-    "test_routing.py": "39dc8bd00ef2101bf26cec83720a851e57564444032c63ad237010b6b62340a8",
-    "voice.py": "3222c3e774553207ca34f02b6e9c62e46a37095bfaf15c4396ccbdda20b062d9",
+    "bridge.py": "73669481afe87ce528e6da7dc263766f39b9703e2266dd932ed2d28ba978be1e",
+    "README.md": "60ceb2f0334a2ba51e968c895ca0b7ad0e2ba62c75316c1fb1e6dc8ad05dbb83",
+    "test_routing.py": "fa2a302d48b15b0664175d8731f856201f5cd8251803945874708841e94e32a7",
+    "voice.py": "42d0ef6bdec75ffe3277970758a3b6f769d443fc3fa4736a973ffd3d5e99af47",
     "setup.py": "bbe55994f272b3a71c2d821b500fc002a9c8d63a6392e90143122414e15eb345",
     ".dockerignore": "08bb7a70af4ae5a9c15226f499f2e76055ebd521550f87eb102a1316cdb9df38",
     ".gitignore": "88a031a6a794857a728446b902c4ee41c255d68635a7773fd6ef07ce567ea2ab",
-    "routing.py": "79bec585fe106f6aa6fcad698ebd218662f96f94dee92e0fdf5c4f6df67a3fa7",
-    "test_interrupt.py": "b998df7b2d656c19bed6f745c816b951e908c4d4f2d2cfde326190619bb92496",
-    "test_switch.py": "9b3d4ca5d90880175aba671d2505a590272de3a374fe242a271e20fa3a9e1f27",
-    "skills/voice-switch/SKILL.md": "440d8846ffcb79c139087b48fb8c0efd1b9e1a430f97ce4724e561601a75be08"
+    "routing.py": "d404ae194270379833a8991f7a2d58b5ce8735dd5c1ecd971776733d0680192b",
+    "test_interrupt.py": "7437f4adcf997ef9d7929ada61007e0c37f24a970479dc8542c1bcb6835962a5",
+    "test_switch.py": "a61b6802c00cb2c243b2dcafa5e6fb1dc917c1808081bf6c10bb31ba758a3e75",
+    "skills/voice-switch/SKILL.md": "87509267b16e02370eebf2d891f6997230e562855cbf1612bf580d7224eb614b"
   }
 }
