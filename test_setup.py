@@ -6,7 +6,8 @@ class SetupTests(unittest.TestCase):
   self.tmp=tempfile.TemporaryDirectory(dir=Path(__file__).parent);self.old=setup.ROOT;setup.ROOT=Path(self.tmp.name)
  def tearDown(self):setup.ROOT=self.old;self.tmp.cleanup()
  def test_profile_contract(self):
-  p=setup.initialize('test','100.64.0.1','100.64.0.2','test-session')
+  p=setup.initialize('test','100.64.0.1','100.64.0.2','test-session','helper')
+  self.assertEqual(json.loads((p/'profile.json').read_text())['wolt'],'helper')
   cfg=(p/'config/pjsip.conf').read_text()
   self.assertIn('media_address=100.64.0.1',cfg);self.assertIn('protocol=tcp',cfg);self.assertIn('allow=opus',cfg)
   xml=ET.fromstring((p/'provisioning.xml').read_bytes());ns={'l':'http://www.linphone.org/xsds/lpconfig.xsd'}

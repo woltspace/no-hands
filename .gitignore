@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 .env
 *.sock
+
+.venv/
+.uv-cache/
+logs/
+CHECKPOINT.json
+*.jsonl
+.buildx/

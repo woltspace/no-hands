@@ -3,9 +3,9 @@ import json,re,uuid
 from pathlib import Path
 
 class Router:
- def __init__(self, profile, default):
+ def __init__(self, profile, default, name="astre"):
   self.path=Path(profile)/'routes.json'
-  self.routes=json.loads(self.path.read_text()) if self.path.exists() else {'astre':{'session':default,'voice':'alba'}}
+  self.routes=json.loads(self.path.read_text()) if self.path.exists() else {name:{'session':default,'voice':'alba'}}
   self.selected=next(iter(self.routes));self.generation=0;self.pending={}
  def switch(self,name):
   if name not in self.routes:raise ValueError('Unknown Wolt; register its verified session first.')

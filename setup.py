@@ -1,4 +1,5 @@
 """Local voice prototype setup. No account login, installation, policy application or public sharing."""
+import sys
 import argparse,base64,ipaddress,json,os,re,secrets,shutil,socket,subprocess,time,uuid
 from pathlib import Path
 from http.server import HTTPServer,BaseHTTPRequestHandler
@@ -23,7 +24,8 @@ def xml_config(host,password):
   for k,v in entries.items():ET.SubElement(sec,'entry',name=k,overwrite='true').text=v
  return ET.tostring(root,encoding='utf-8',xml_declaration=True)
 
-def initialize(name,mac,phone,session):
+def initialize(name,mac,phone,session,wolt="assistant"):
+ if not re.fullmatch('[a-z][a-z0-9-]*',wolt):raise ValueError('Wolt name must be lowercase letters, digits and hyphens.')
  mac=tail_ip(mac);phone=tail_ip(phone)
  if mac==phone:raise ValueError('Device addresses must differ.')
  if not re.fullmatch(r'[a-zA-Z0-9_-]+',session):raise ValueError('Provide a verified Wolt session ID.')
@@ -31,7 +33,7 @@ def initialize(name,mac,phone,session):
  if p.exists():raise ValueError('Profile exists. Choose another name; existing credentials are not overwritten.')
  os.umask(0o077);p.mkdir(parents=True,mode=0o700);(p/'config').mkdir();(p/'replies').mkdir()
  password=secrets.token_urlsafe(24);token=str(uuid.uuid4())
- settings={'name':name,'mac_ip':mac,'phone_ip':phone,'session':session,'trial_seconds':3600,'container':'shellphone-voice-'+name}
+ settings={'name':name,'mac_ip':mac,'phone_ip':phone,'session':session,'wolt':wolt,'trial_seconds':3600,'container':'shellphone-voice-'+name}
  (p/'profile.json').write_text(json.dumps(settings,indent=2));(p/'bridge-token').write_text(token)
  (p/'credentials.json').write_text(json.dumps({'username':'voice-phone','password':password}))
  (p/'provisioning.xml').write_bytes(xml_config(mac,password))
@@ -73,7 +75,6 @@ exten => 100,1,Answer()
  same => n,Echo()
  same => n,Hangup()
 exten => 101,1,Answer()
- same => n,Set(TIMEOUT(absolute)=900)
  same => n,Dial(AudioSocket/host.docker.internal:18974/{token}/c(slin48))
  same => n,Hangup()
 ''')
@@ -112,16 +113,16 @@ def qr(name,minutes):
 
 def main():
  ap=argparse.ArgumentParser(description=__doc__);sub=ap.add_subparsers(dest='action',required=True)
- init=sub.add_parser('init');init.add_argument('--name',default='personal');init.add_argument('--mac-ip',required=True);init.add_argument('--phone-ip',required=True);init.add_argument('--session',required=True)
+ init=sub.add_parser('init');init.add_argument('--name',default='personal');init.add_argument('--mac-ip',required=True);init.add_argument('--phone-ip',required=True);init.add_argument('--session',required=True);init.add_argument('--wolt',required=True)
  for action in ['start','stop','status','bridge','qr']:
   x=sub.add_parser(action);x.add_argument('--name',default='personal')
   if action=='qr':x.add_argument('--minutes',type=int,choices=range(1,31),default=15)
  a=ap.parse_args()
- if a.action=='init':print('Created private inactive profile:',initialize(a.name,a.mac_ip,a.phone_ip,a.session));return
+ if a.action=='init':print('Created private inactive profile:',initialize(a.name,a.mac_ip,a.phone_ip,a.session,a.wolt));return
  p,c=load(a.name)
  if a.action=='qr':qr(a.name,a.minutes);return
  if a.action=='bridge':
-  env=os.environ.copy();env['VOICE_PROFILE']=str(p);raise SystemExit(subprocess.call(['python3',str(ROOT/'bridge.py')],env=env))
+  env=os.environ.copy();env['VOICE_PROFILE']=str(p);raise SystemExit(subprocess.call([sys.executable,str(ROOT/'bridge.py')],env=env))
  if a.action=='start':
   for proto,port in [(socket.SOCK_STREAM,5060),(socket.SOCK_STREAM,18974)]:
    with socket.socket(socket.AF_INET,proto) as sock:

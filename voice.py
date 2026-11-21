@@ -21,8 +21,13 @@ def main():
  s=p.add_subparsers(dest='action',required=True);s.add_parser('status')
  a=s.add_parser('add');a.add_argument('name');a.add_argument('session');a.add_argument('--voice',required=True)
  a=s.add_parser('switch');a.add_argument('name')
+ a=s.add_parser('music');a.add_argument('mode',choices=['play','off','on','next','volume']);a.add_argument('value',nargs='?')
  a=s.add_parser('reply');a.add_argument('turn')
  a=p.parse_args();request=vars(a).copy();profile=request.pop('profile')
+ if a.action=='music':
+  value=request.pop('value')
+  if a.mode=='play':request['source']=value
+  elif a.mode=='volume':request['volume']=float(value) if value is not None else None
  if a.action=='reply':request['text']=sys.stdin.read(1201)
  try:print(json.dumps(call(profile,request)))
  except (OSError,RuntimeError) as e:p.exit(1,str(e)+'\n')

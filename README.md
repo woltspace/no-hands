@@ -1,120 +1,186 @@
-# No-hands — voice prototype
+# No-hands
 
-Call your AI while walking.
+Talk to your Wolt from your phone. Ask questions, switch to another Wolt, or ask it to put on a radio station—all within one call.
 
-An experimental hands-free voice bridge for Wolt sessions. Initial MVP: two participating Wolts on one phone call, with spoken switching and distinct voices. This checkpoint includes CLI switching; per-route voices are supported. Switching is performed by the Wolt via the CLI when asked; real two-Wolt phone validation remains. It is not a one-click installer.
+**Experimental, single-owner prototype.** Conversations and radio have been tried on real phones, but car noise can still trigger speech detection and AudioSocket transport timeouts have dropped calls. A fresh installation on a friend's Mac has not yet been validated. Expect to use a terminal and troubleshoot.
 
-## What works
-- Linphone call → Tailscale → Asterisk → local WOCAL ASR → existing Wolt session → local WOCAL TTS → call.
-- Opus with48kHz PCM bridge; no narrowband fallback.
-- “Welcome to Shellphone!” greeting.
-- Faint generated music, music on/off/change commands, music mute while speaking.
-- Speech interrupts queued playback; it does not cancel agent work already delivered.
-- Captured tick; delivered rising chime; descending failure/timeout cue. Delivered does not mean completed.
-- Private QR onboarding; voice settings go into Linphone without typing a password.
+## How it works
 
-Prototype testing covered local conversation, music muting and interruption. Remote call input and spoken exchange succeeded after TCP signaling and explicit media_address correction; longer cellular/locked-screen/battery testing remains. Original echo with locked screen worked on Wi-Fi. Do not claim all combinations tested.
+Your phone runs Linphone. Tailscale connects it privately to your Mac, where Asterisk handles the call. A Python bridge sends speech to a local voice server, delivers the transcript to a running Wolt session, and plays its answer back.
 
-## Scope
-Two-way conversation with an existing Wolt/WOCAL host. One-way radio and generalized session management are deferred. Shellphone room routing is not automatic: the bridge targets registered Wolt sessions.
+```text
+Linphone → Tailscale → Asterisk → bridge → local ASR → Wolt
+                                  ↑                    ↓
+                                  └──── local TTS ← reply
+```
 
-## Phone setup (the short version)
-1. Create/sign in to a Personal Tailscale account for non-commercial use. Install Tailscale on Mac and iPhone and use the same account. The Personal plan is currently free; ordinary internet/mobile data costs remain.
-2. Install Linphone. Allow microphone; allow local network for LAN testing. Camera is needed for QR scanning only. Contacts and video camera access are not required for audio calling. Review permissions afterward.
-3. Give the host operator the Mac and iPhone Tailscale IPv4 addresses. Never share login passwords, recovery codes or Tailscale auth/API keys.
-4. Host operator starts the stack and opens the private QR page on another screen.
-5. In Linphone choose Scan QR Code. Tailscale must stay connected. This prototype overwrites the first SIP account, so use a fresh app profile or deliberately replace the test account.
-6. Dial100 for echo, then101 for the Wolt. Test on Wi-Fi, then cellular with Wi-Fi off.
+The bridge uses WebRTC voice activity detection and 48 kHz mono audio. Wolts interpret your words and run CLI controls; the bridge does not match spoken commands. It supports one call at a time, with one selected Wolt. Switching does not transfer conversation history or cancel work already delivered.
 
-## Host prerequisites (not installed automatically)
-- Supported Mac with Docker Desktop running, Python3, ffmpeg, and uv for QR dependencies.
-- WOCAL already running at127.0.0.1:4077: /health, /v1/audio/transcriptions (model parakeet), /v1/audio/speech (voice alba).
-- Woltspace with `woltspace session send` on PATH, a verified live target session, and a session able to write the supplied local reply file. Agent model provider/billing remain unchanged. Other agent harnesses need an adapter.
-- Tailscale connected on both devices; Mac private address locally bindable.
-- Network policy reviewed for phone→Mac TCP5060 and UDP18000–18009. Temporarily allow TCP18975 for QR provisioning. Generated policy is a draft; broad existing allow rules are additive and must be reviewed. No router port forwarding, public Funnel, exit node or subnet route required.
-- Mac awake/reachable for the trial; no sleep/settings changes made automatically.
+## Before you start
 
-## Prepare
-From this directory:
+On your Mac, install and start:
+
+- [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/), including Docker Compose.
+- Python **3.13** (the tested version), Git, and ffmpeg on your PATH. Installing `webrtcvad` may require the Apple command-line build tools.
+- [Tailscale](https://tailscale.com/download) on both Mac and phone, signed into the same private network. The Mac must stay awake and reachable.
+- A working **Woltspace** installation with `woltspace session send` on PATH and a running Wolt session.
+- A local **WOCAL-compatible voice server** at `http://127.0.0.1:4077`. This repository does not install it. It must provide `POST /v1/audio/transcriptions` (multipart WAV, model `parakeet`, JSON `text`) and `POST /v1/audio/speech` (`input`, `voice`, `response_format: wav`). The default voice is `alba`.
+
+On your phone, install [Linphone](https://www.linphone.org/) and Tailscale. Microphone access is required; camera access is only needed to scan the setup QR. Use headphones for the first test.
+
+**Do not start with only a phone.** The Mac, agent session and voice server are required. Another ASR/TTS server needs to satisfy the above contract and voice names; arbitrary OpenAI-compatible endpoints are not automatically supported. Agent-provider costs and permissions remain those of your Wolt installation.
+
+## 1. Get the code and Python dependencies
 
 ```sh
+git clone https://github.com/woltspace/no-hands.git
+cd no-hands
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 docker build -t shellphone-voice:local .
-python3 setup.py init --name personal --mac-ip MAC_TAILSCALE_IP --phone-ip PHONE_TAILSCALE_IP --session VERIFIED_WOLT_SESSION
 ```
 
-The profile is stored in runtime/personal with restrictive permissions. It creates fresh SIP credentials, a bridge UUID, Asterisk config, Docker Compose file, policy draft and provisioning XML. Init does not start services or change Tailscale. Never publish runtime/ or its QR codes. Existing profiles are never silently overwritten.
+The repository must be accessible to your GitHub account while it is private. The Docker image contains Asterisk, not your agent or voice server.
 
-Stop earlier trial listeners before starting another stack on the same ports; do not stop unrelated apps.
-
-## Start / QR / stop
-```sh
-python3 setup.py start --name personal
-```
-In a managed background session, start the bridge:
-```sh
-python3 setup.py bridge --name personal
-```
-In another terminal or managed background session, serve the QR temporarily:
-```sh
-uv run --with 'qrcode[pil]' python setup.py qr --name personal --minutes 15
-```
-Open the LOCAL setup-qr.html path printed by that command on the Mac. It is not a public page. The QR server accepts only the selected phone's private source IP and a random URL token; the port closes at expiry or Ctrl-C. It removes generated QR HTML/image on normal shutdown. The underlying private XML stays in the profile for later reprovisioning. An updated QR replaces the old first account, including explicit TCP server/route.
-
-Bridge runs1h by default; a call is capped15min. Managed persistent lifecycle is not implemented. Press Ctrl-C in the bridge terminal to stop it, then:
-```sh
-python3 setup.py stop --name personal
-python3 setup.py status --name personal
-```
-`stop` stops only this profile's container; bridge and provisioning are separate processes. No auto-start at login/reboot. Do not promise later calls will work after the timed bridge ends.
-
-## Call controls
-- No wake word. Speak, then pause~1.1s. Utterances max120s (two minutes). Transcription uploads are downsampled to16kHz; call audio stays48kHz.
-- Energy detection, not a trained VAD. Headphones recommended to avoid speaker echo triggering interruptions.
-- Music on / music off / change the music (two local generated loops).
-- Start talking to interrupt playback. Stop/okay stop/stop talking ends playback without asking the agent a question. More complex phrases may reach the agent.
-- Music mutes while speaking, resumes afterward, and ducks during replies.
-- Tick: captured for transcription. Rising chime: transcript handed to Wolt. Lower cue: empty/failed transcription, delivery error or reply timeout. Local music/stop commands do not produce a “sent” cue.
-- Mute/hangup in Linphone. Muting is the sure way to avoid interpreting ambient conversation.
-
-## Troubleshooting learned from the actual phone tests
-| Symptom | Check / fix |
-|---|---|
-| Wrong username/password after QR | Older Asterisk rejected long push notification contacts. Disable both push flags in provisioning. Do not assume a credential problem. |
-| Registration succeeds, calls stall over VPN | Use TCP signaling. UDP authenticated INVITE disappeared in our test; fragmentation suspected, not proven. |
-| Hear music, microphone never arrives | Check SDP `c=`. Explicit endpoint media_address must be the Mac Tailscale IP, not172.x Docker IP. Restart container if reload doesn't apply. |
-| Still dialing192.168... | Old call history/account. Scan updated QR and use sip:101@MAC_TAILSCALE_IP. |
-| Muffled despite48k bridge | Verify negotiated NativeFormats opus; earlier calls silently used ulaw8k. This setup requires Opus. |
-| Silence/no Wolt response | Check bridge process and WOCAL health; bridge expires after1h. Check target Wolt session and response-file permissions. |
-| Music but no speech detection | Check mic mute, permission, RTP route and input level; don't repeatedly change credentials. |
-| No tutorial | Current greeting intentionally only says Welcome to Shellphone! |
-| Speech stops itself | Use headphones; echo/noise may trigger the energy detector. |
-
-## Security and remaining work
-VPN encrypts device-to-device traffic, including relay paths; audio is decrypted on the Mac for local processing. Raw SIP/RTP and provisioning HTTP rely on that VPN for transport protection. Original LAN profile was unencrypted. Audio chunks stay in bridge RAM, but transcripts enter Wolt history and Asterisk writes operational logs. Do not log full SIP auth headers or publish QR/provisioning files. The bridge UUID is a same-host trust mechanism, not a hardened multi-user boundary.
-
-Voice recognition can be wrong. The transcript envelope requires text confirmation of consequential actions; this prototype does not enforce a complete authorization system. Stopping audio does not undo actions or cancel an already-delivered agent request. One active call only. Conferencing parked.
-
-Remaining: supervised lifecycle, installation/update UX, robust VAD/echo cancellation, bounded transcription/TTS cancellation, stale reply cleanup, exact command parsing, authentication/permissions for multiple people, selectable agent/room mapping, one-way worker integration, secure provisioning beyond the personal VPN test, mobile handover and battery tests. Keep checkpoint claims narrower than these product goals.
-
-References:
-- https://tailscale.com/pricing
-- https://tailscale.com/docs/install/mac
-- https://tailscale.com/docs/install/ios
-- https://www.linphone.org/en/docs/login-with-qrcode/
-- https://docs.asterisk.org/Configuration/Channel-Drivers/AudioSocket/
-
-## Local Wolt switching prototype
-
-The single caller stays connected while the selected destination changes. `routing.py` is the small routing library; `voice.py` is its Unix-socket CLI. Start the bridge with the existing `setup.py bridge --name personal` command, then:
+Check your prerequisites:
 
 ```sh
-python3 voice.py --profile runtime/personal status
-python3 voice.py --profile runtime/personal add softie VERIFIED_SESSION_ID --voice marius
-python3 voice.py --profile runtime/personal switch softie
+ffmpeg -version
+docker compose version
+curl --fail http://127.0.0.1:4077/health
+woltspace session list --alive
 ```
 
-Each incoming turn includes the exact CLI reply command. Supply its spoken answer on stdin. The bundled `skills/voice-switch/SKILL.md` explains conversational confirmation and reply handling. No speech command parser is needed for switching: the Wolt invokes the CLI.
+Both speech and transcription should be ready. Choose an actual running session ID, not just a Wolt name. Tell that Wolt it will receive live-call turns and should follow the exact reply command in each turn. See [the agent instructions](skills/voice-switch/SKILL.md).
 
-Registered sessions persist in private `routes.json`; the selected destination resets to the first registered entry when the bridge starts. A switch discards queued speech and partial input, cancels the old reply waiter, and rejects old turn IDs. It does not cancel work already delivered to a Wolt. Only future turns go to the new destination. No conversation history is forwarded.
+## 2. Create your private phone profile
 
-This is single-owner, same-OS-user tooling. The socket is mode0600, not an authorization boundary between Wolts running under that user. A destination must be a real, reachable Wolt session. Cross-Wolt calls still need a real phone test; synthetic checks are not proof of successful handoff.
+Find each device's Tailscale IPv4 address in the Tailscale app. Replace every uppercase placeholder below with your values:
+
+```sh
+.venv/bin/python setup.py init --name personal \
+  --mac-ip MAC_TAILSCALE_IP \
+  --phone-ip PHONE_TAILSCALE_IP \
+  --wolt YOUR_WOLT_NAME \
+  --session YOUR_RUNNING_SESSION_ID
+```
+
+This creates `runtime/personal/` with fresh credentials, configuration and QR provisioning data. It does not start services or change your Tailscale policy. Existing profiles are never overwritten.
+
+Allow the phone to reach the Mac on **TCP 5060**, **UDP 18000–18009**, and temporarily **TCP 18975** for QR setup. The generated `policy-draft.json` is a draft to review against your existing Tailscale policy; it is not applied automatically. Do not expose these ports with public port forwarding or a public tunnel.
+
+Docker must be able to publish ports on the Mac's Tailscale address. If it cannot, resolve that host/network setup before proceeding; substituting a public bind address changes the security assumptions.
+
+## 3. Start the call stack
+
+Start the phone server:
+
+```sh
+.venv/bin/python setup.py start --name personal
+```
+
+In a terminal you leave open, start the bridge:
+
+```sh
+.venv/bin/python setup.py bridge --name personal
+```
+
+Wait for `Local voice bridge ready`. In another terminal, temporarily serve the setup QR:
+
+```sh
+.venv/bin/python setup.py qr --name personal --minutes 15
+```
+
+Open the **local HTML file** printed by the command on your Mac. In Linphone on the phone, choose Scan QR Code. Tailscale must be connected on both devices. This provisioning replaces Linphone's first SIP account: use a fresh app setup or deliberately replace a test account.
+
+Keep the QR private. It contains access to your phone configuration. The provisioning server accepts only the configured phone address and closes after the specified interval. Ctrl-C also stops it and removes generated QR images on normal exit.
+
+## 4. Make your first call
+
+1. Dial **100** for an echo test. Speak and listen for your voice.
+2. Dial **101** for the Wolt. If Linphone requires an address, use `sip:101@MAC_TAILSCALE_IP`.
+3. Ask a short question, then pause roughly **1.1 seconds**.
+4. After Wi-Fi works, test cellular with Wi-Fi off and Tailscale still connected.
+
+A tick means audio was captured; a rising chime means the transcript was delivered to the Wolt, not that it finished. An error cue indicates a failure or timeout. Replies from a busy Wolt may be delayed.
+
+The detector requires 0.4 seconds of consecutive speech. Raw detection lowers reply volume to 20% rather than deleting it. An empty transcription preserves the pending answer; recognized new words supersede it. Speech recognition can still misinterpret background sound. No walk/drive profiles or automatic noise-floor adaptation are implemented yet.
+
+## 5. Add another Wolt or control music
+
+While the bridge is running:
+
+```sh
+.venv/bin/python voice.py --profile runtime/personal status
+.venv/bin/python voice.py --profile runtime/personal add helper OTHER_SESSION_ID --voice cosette
+.venv/bin/python voice.py --profile runtime/personal switch helper
+```
+
+The CLI prints the selected Wolt and voice. Ask the Wolt on the call to switch for you. There is no automatic spoken departure/arrival announcement yet; the next reply uses the new voice. On bridge restart, selection resets to the first registered route.
+
+A voice change currently uses `add` with the **same name and session ID**, plus a different `--voice`. Use a voice supported by your voice server. This is trusted host setup, not a permission boundary between Wolts.
+
+Music controls also go through the Wolt, or directly through the CLI:
+
+```sh
+.venv/bin/python voice.py --profile runtime/personal music play HTTPS_AUDIO_STREAM_URL
+.venv/bin/python voice.py --profile runtime/personal music volume 15
+.venv/bin/python voice.py --profile runtime/personal music off
+.venv/bin/python voice.py --profile runtime/personal music on
+.venv/bin/python voice.py --profile runtime/personal music next
+```
+
+`play` requires a direct HTTP(S) audio stream, not a station's webpage. `off` stops its decoder; `on` then enables the generated background bed. `next` selects the other generated tune. Volume is 0–100; 8 is the default. Music is reduced under replies and muted while the caller is speaking. A new call starts with the generated bed on. Local library playback is not implemented.
+
+## Stop, restart and logs
+
+Stop the bridge with Ctrl-C in its terminal. Then stop its Asterisk container:
+
+```sh
+.venv/bin/python setup.py stop --name personal
+.venv/bin/python setup.py status --name personal
+```
+
+`stop` controls the container only; it does not terminate a separate bridge or QR process. There is no automatic login/reboot startup or crash supervisor.
+
+New profiles expire the bridge after one hour. To keep it running, edit `runtime/personal/profile.json`, set `trial_seconds` to JSON `null`, and restart the bridge. Conversation calls have no fixed duration cutoff; the echo test ends after five minutes.
+
+Per-call diagnostic logs are under `runtime/personal/logs/`. During a call, `voice.py status` reports the exact `call_log` path. Logs contain timestamps, RMS summaries, VAD counts, turn/reply timing, playback ducking, music/control state and observed hangup events. They contain **no recorded audio or transcript text**. They are local, not uploaded, and are not automatically rotated or deleted. Wolt history does contain transcripts; Asterisk has separate operational logs. Correlate their timestamps when investigating drops.
+
+## Troubleshooting and known limits
+
+| Symptom | Check |
+| --- | --- |
+| QR registers but calls do not connect | Keep Tailscale on; provisioning uses TCP SIP. Check the configured Mac address and allowed ports. |
+| Music arrives but no microphone audio | Check Linphone microphone permissions/mute and the configured media address. |
+| No agent answer | Check the selected session is running, the bridge terminal, and voice-server health. |
+| Call drops | Asterisk AudioSocket payload-read timeouts have occurred in real testing. This remains unresolved; redialing is a workaround, not a fix. |
+| Car noise triggers interruptions | Inspect VAD/ducking logs. Noise handling is experimental; headphones and car Bluetooth can behave differently. |
+| `No active call` for music | Dial 101 first. Music belongs to the current call. |
+| Reply rejected as expired/switched | A newer recognized utterance, switch, timeout or hangup may have ended the turn. Do not replay stale replies into another channel. |
+| Port already in use | Stop your previous trial, not an unrelated application. Only one stack can use these fixed ports. |
+
+Audio has been tested with Opus, but music can sound thin and mobile handover/battery behavior is not validated. This is not a general multi-user phone gateway, conferencing server, or emergency calling service.
+
+## Privacy and trust
+
+The intended network boundary is your private Tailscale network. SIP/RTP and QR HTTP are not independently encrypted by this project. The Mac decrypts and processes audio locally; transcripts enter the agent's context and may go to its model provider. The voice server and agent have their own retention policies.
+
+Keep `runtime/`, credentials, QR files, call logs and tokens out of Git and shared screenshots. The Unix control socket is owner-only, but processes running as the same OS user are trusted. The bridge's call token is not strong isolation against other local processes. Voice instructions ask for text confirmation of consequential actions; that is a convention, not an enforced authorization system.
+
+## Development checks
+
+```sh
+.venv/bin/python -m unittest test_setup.py test_routing.py
+.venv/bin/python test_interrupt.py
+.venv/bin/python test_noise_reply.py
+.venv/bin/python test_noise_playback.py
+.venv/bin/python test_switch.py
+.venv/bin/python test_add_during_call.py
+```
+
+Setup tests validate generated Docker Compose configuration without starting containers. Call tests use synthetic audio and mocked agent delivery. Optional `test_radio.py` and `test_call_radio.py` contact an external test stream. Passing these checks does not establish fresh-device onboarding or real-world call stability.
+
+## License
+
+[MIT](LICENSE) for this repository's code. Asterisk, WebRTC VAD, ffmpeg and other dependencies retain their own licenses; see [THIRD_PARTY.md](THIRD_PARTY.md).
