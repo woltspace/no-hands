@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>No-hands</title>
+<link rel="stylesheet" href="/style.css">
+<script defer src="/app.js">
+</script>
+</head>
+<body>
+<main>
+<header>
+<span class="eyebrow">NO-HANDS · EXPERIMENTAL</span>
+<h1>Call your Wolt.</h1>
+<p class="lead">A few phone steps. Your Wolt handles the rest.</p>
+</header>
+<p id="error" role="alert" hidden>
+</p>
+<section class="card">
+<span class="number">1</span>
+<h2>Your Mac</h2>
+<p id="setup">Checking your setup…</p>
+<ul id="checks" aria-label="Setup checks">
+</ul>
+<p id="provider">
+</p>
+<p class="muted">Choose local speech or OpenAI with your Wolt before setup. With OpenAI, call audio and reply text go to OpenAI and API charges apply. All voices are AI-generated.</p>
+<div class="actions">
+<button id="start" disabled>Start phone</button>
+<button id="stop" class="secondary" hidden>Stop phone</button>
+<button id="refresh" class="secondary">Check again</button>
+</div>
+<p id="operation" role="status" aria-live="polite">
+</p>
+</section>
+<section class="card">
+<span class="number">2</span>
+<h2>Get your phone ready</h2>
+<p>Install <a href="https://www.linphone.org/" target="_blank" rel="noreferrer">Linphone</a> and <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale</a>. Connect your phone and Mac to the same Tailscale network.</p>
+<p class="muted">Your Wolt will guide any sign-in or permission step. Use headphones for your first call.</p>
+</section>
+<section class="card">
+<span class="number">3</span>
+<h2>Scan in Linphone</h2>
+<p>Open this page on your Mac, then use Linphone’s QR scanner on your phone.</p>
+<p class="muted">This replaces Linphone’s first SIP account. Use a fresh setup or an account you intend to replace. Keep the QR private; it expires after 15 minutes.</p>
+<button id="qr" disabled>Create setup QR</button>
+<button id="hide-qr" class="secondary" hidden>Hide and expire QR</button>
+<div id="qrbox" hidden>
+<img id="qrimage" alt="Private Linphone setup QR">
+<p>Keep Tailscale connected while scanning.</p>
+</div>
+</section>
+<section class="card finish">
+<span class="number">4</span>
+<h2 id="ready">Almost ready</h2>
+<p id="dial">Start the phone above. We’ll check the services before you call.</p>
+<p class="muted">If audio does not connect, dial 100 for an echo test and tell your Wolt what happened. Keep this Mac awake. Stopping the app in the lodge ends its phone services.</p>
+</section>
+<footer>Something confusing? Tell your Wolt. It will record setup friction locally and ask before sharing a sanitized report.<br>Call reliability and car-noise handling are still experimental.</footer>
+</main>
+</body>
+</html>
