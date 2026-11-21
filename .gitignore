@@ -10,3 +10,5 @@ logs/
 CHECKPOINT.json
 *.jsonl
 .buildx/
+
+.test-build/

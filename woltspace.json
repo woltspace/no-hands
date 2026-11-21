@@ -1,0 +1,12 @@
+{
+  "name": "no-hands",
+  "description": "Call your Wolt. Guided private phone setup.",
+  "stack": "python",
+  "port": 4091,
+  "install": "python3.13 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt",
+  "start": "exec .venv/bin/python app.py serve --port $PORT",
+  "keeper": "no-hands",
+  "source": "https://github.com/woltspace/no-hands",
+  "emoji": "\u260e\ufe0f",
+  "public": false
+}

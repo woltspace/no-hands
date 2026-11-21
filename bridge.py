@@ -15,21 +15,18 @@ busy=False
 RADIO=None
 EVENTS=None
 
-def request(path,data,ctype):
- req=urllib.request.Request('http://127.0.0.1:4077'+path,data=data,headers={'Content-Type':ctype})
- with urllib.request.urlopen(req,timeout=50) as r:return r.read(8000000)
+from speech_provider import SpeechProvider
+PROVIDER=SpeechProvider(SETTINGS)
 
 def speech(text,voice):
- audio=request('/v1/audio/speech',json.dumps({'input':text[:1200],'voice':voice,'response_format':'wav'}).encode(),'application/json')
+ audio=PROVIDER.speech(text,voice)
  return subprocess.run(['ffmpeg','-v','error','-i','pipe:0','-t','60','-ar',str(RATE),'-ac','1','-f','s16le','pipe:1'],input=audio,capture_output=True,check=True,timeout=15).stdout
 
 def transcribe(pcm):
  pcm=subprocess.run(['ffmpeg','-v','error','-f','s16le','-ar',str(RATE),'-ac','1','-i','pipe:0','-ar','16000','-ac','1','-f','s16le','pipe:1'],input=pcm,capture_output=True,check=True,timeout=15).stdout
  b=io.BytesIO()
  with wave.open(b,'wb') as w:w.setnchannels(1);w.setsampwidth(2);w.setframerate(16000);w.writeframes(pcm)
- boundary=uuid.uuid4().hex
- body=(f'--{boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nparakeet\r\n--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="speech.wav"\r\nContent-Type: audio/wav\r\n\r\n'.encode()+b.getvalue()+f'\r\n--{boundary}--\r\n'.encode())
- return json.loads(request('/v1/audio/transcriptions',body,'multipart/form-data; boundary='+boundary)).get('text','').strip()[:4000]
+ return PROVIDER.transcribe(b.getvalue())
 
 def music_frames(style):
  # Quiet original arpeggios. No remote stream, downloads or recorded music.
@@ -253,7 +250,7 @@ async def control(reader,writer):
    if RADIO is None:raise ValueError('No active call')
    await RADIO.command(req['mode'],req.get('source'),req.get('volume'))
   elif action!='status':raise ValueError('Unknown action')
-  result=ROUTER.status();result['music']=RADIO.status() if RADIO else None
+  result=ROUTER.status();result['active_call']=busy;result['music']=RADIO.status() if RADIO else None
   if EVENTS:
    result['call_log']=str(EVENTS.path);result['log_error']=EVENTS.error
    if action in ('music','switch','add'):EVENTS.emit('state',wolt=ROUTER.selected,music=result['music'])
