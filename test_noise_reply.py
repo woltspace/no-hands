@@ -25,7 +25,7 @@ async def fake_spawn(*args,**kwargs):
  return Process()
 asyncio.create_subprocess_exec=fake_spawn
 async def test():
- answers=iter(['hello','','new question'])
+ answers=iter(['hello','','uh, uh','new question'])
  m.transcribe=lambda pcm:next(answers)
  server=await asyncio.start_server(m.client,'127.0.0.1',0)
  r,w=await asyncio.open_connection('127.0.0.1',server.sockets[0].getsockname()[1]);w.write(b'\x01\x00\x10'+m.TOKEN);await w.drain()
@@ -43,6 +43,7 @@ async def test():
  await utterance();assert len(m.ROUTER.pending)==1
  old=next(iter(m.ROUTER.pending));future=m.ROUTER.pending[old]
  await utterance();assert m.ROUTER.pending.get(old) is future and not future.done(),'empty ASR cancelled reply'
+ await utterance();assert m.ROUTER.pending.get(old) is future and not future.done(),'filler-only ASR cancelled reply'
  await utterance();assert old not in m.ROUTER.pending,'new words did not supersede old turn'
  try:m.ROUTER.reply(old,'stale')
  except ValueError:pass
@@ -50,6 +51,6 @@ async def test():
  new=next(iter(m.ROUTER.pending));m.ROUTER.reply(new,'current accepted')
  w.close();await w.wait_closed();await reader;await asyncio.sleep(.3)
  server.close();await server.wait_closed()
- print('PASS empty ASR preserves pending reply; new words supersede; stale reply rejected')
+ print('PASS empty/filler-only ASR preserves pending reply; new words supersede; stale reply rejected')
 try:asyncio.run(test())
 finally:tmp.cleanup()

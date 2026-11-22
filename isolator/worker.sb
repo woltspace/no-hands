@@ -1,0 +1,14 @@
+; sandbox-exec -D TRIAL=/abs/trial/folder -D HOME=$HOME -f trial.sb COMMAND
+; For RUNNING the built benchmark (not the toolchain install or the dependency fetch):
+; no network or local sockets, no reading home, temp or volumes except the trial, writes only to the trial.
+(version 1)
+(allow default)
+(deny network*)
+(deny appleevent-send)
+(deny lsopen)
+(deny job-creation)
+(deny file-read-data (subpath (param "HOME")) (subpath "/private/tmp") (subpath "/Volumes"))
+(allow file-read-data (subpath (param "TRIAL")))
+(deny file-write*)
+(allow file-write* (subpath (param "TRIAL")) (literal "/dev/null"))
+(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd") (global-name "com.apple.pasteboard.1"))

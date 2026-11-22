@@ -46,7 +46,9 @@ async def test():
  await asyncio.sleep(.4)
  assert not sent, 'empty transcript must not reach Wolt'
  assert min(received[-5:])>4000,'empty ASR must preserve remaining reply audio'
- w.write(b'\0\0\0');await w.drain();w.close();await w.wait_closed();await reader;await asyncio.sleep(.05)
+ log=m.EVENTS
+ w.write(b'\0\0\0');await w.drain();w.close();await w.wait_closed();await reader
+ await asyncio.to_thread(log.worker.join,2)
  server.close();await server.wait_closed();assert not m.busy
  import json
  logs=list((p/'logs').glob('call-*.jsonl'));assert len(logs)==1

@@ -4,6 +4,7 @@ import argparse,base64,ipaddress,json,os,re,secrets,shutil,socket,subprocess,tim
 from pathlib import Path
 from http.server import HTTPServer,BaseHTTPRequestHandler
 import xml.etree.ElementTree as ET
+from call_modes import mode_token
 ROOT=Path(__file__).resolve().parent
 IMAGE='shellphone-voice:local'
 
@@ -75,7 +76,10 @@ exten => 100,1,Answer()
  same => n,Echo()
  same => n,Hangup()
 exten => 101,1,Answer()
- same => n,Dial(AudioSocket/host.docker.internal:18974/{token}/c(slin48))
+ same => n,Dial(AudioSocket/host.docker.internal:18974/{mode_token(token,'normal')}/c(slin48))
+ same => n,Hangup()
+exten => 102,1,Answer()
+ same => n,Dial(AudioSocket/host.docker.internal:18974/{mode_token(token,'car')}/c(slin48))
  same => n,Hangup()
 ''')
  (p/'config/rtp.conf').write_text('[general]\nrtpstart=18000\nrtpend=18009\nicesupport=no\n')
@@ -101,7 +105,7 @@ def qr(name,minutes):
    print('Phone fetched settings.',flush=True)
  server=HTTPServer((c['mac_ip'],18975),Handler);server.timeout=1
  qrcode.make(url).save(p/'setup-qr.png');img=base64.b64encode((p/'setup-qr.png').read_bytes()).decode()
- (p/'setup-qr.html').write_text('<!doctype html><meta name="viewport" content="width=device-width"><title>Shellphone voice setup</title><style>body{font:20px system-ui;text-align:center;padding:30px}img{width:420px;max-width:90vw}</style><h1>Scan in Linphone</h1><p>Keep Tailscale connected on your iPhone.</p><img alt="Private setup QR" src="data:image/png;base64,'+img+'"><p>Replaces the first SIP account. Keep this QR private.</p><p>Once registered, dial 100 to test audio, then 101 to speak to your Wolt.</p>')
+ (p/'setup-qr.html').write_text('<!doctype html><meta name="viewport" content="width=device-width"><title>Shellphone voice setup</title><style>body{font:20px system-ui;text-align:center;padding:30px}img{width:420px;max-width:90vw}</style><h1>Scan in Linphone</h1><p>Keep Tailscale connected on your iPhone.</p><img alt="Private setup QR" src="data:image/png;base64,'+img+'"><p>Replaces the first SIP account. Keep this QR private.</p><p>Once registered, dial 100 to test audio, 101 for normal mode, or 102 for car mode.</p>')
  print('Open this LOCAL page on your Mac:',p/'setup-qr.html',flush=True)
  print(f'QR service expires in {minutes} minutes. Ctrl-C stops it.',flush=True)
  try:

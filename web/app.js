@@ -48,7 +48,7 @@ async function refresh() {
     previousQR = state.qr;
     el('ready').textContent = state.ready ? 'Ready to call' : 'Almost ready';
     el('dial').textContent = state.ready
-      ? 'Dial 101 in Linphone to talk to ' + state.wolt + '. ' + (state.active_call
+      ? 'Dial 101 for normal mode or 102 for car mode to talk to ' + state.wolt + '. ' + (state.active_call
         ? 'A call is connected.'
         : 'Then say hello. Phone registration and the audio path are confirmed by your first call.')
       : 'Start the phone above. We’ll check the services before you call.';
