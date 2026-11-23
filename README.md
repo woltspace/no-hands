@@ -22,5 +22,5 @@ You need a Mac running Woltspace and Docker Desktop. Keep it awake and Tailscale
 
 [MIT license](LICENSE). Dependencies retain their [own licenses](THIRD_PARTY.md).
 
-Optional call extras: [sandboxed MLX isolation and Wolt chime-in](docs/call-extras.md).
+Call extras: [experimental, opt-in MLX noise isolation and Wolt chime-in](docs/call-extras.md). Isolation is off by default; once prepared, use `isolation on` to try it on a call and `isolation off` to stop.
 Isolation is off by default and needs a separately prepared Mac worker; `say` allows the current call's Wolt to queue a short update without a pending turn. These features still require real-phone acceptance testing.

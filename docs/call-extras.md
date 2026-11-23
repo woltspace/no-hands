@@ -1,4 +1,4 @@
-# Optional isolation and unprompted speech
+# Experimental opt-in isolation and unprompted speech
 
 Both features are local, experimental, and independent of the call listening mode. Installing these source changes requires an idle bridge restart; do not restart an active call. No Asterisk change is needed specifically for these two features. The separate transport/mode dialplan update has its own deployment procedure.
 
@@ -16,7 +16,7 @@ The CLI reads `WOLTSPACE_WOLT_SESSION` and snapshots call ID and route generatio
 
 Text is limited to 600 characters; at most three messages may wait behind an active chime. Acceptance means queued, not heard. Chimes serialize with ordinary synthesized replies, pause while microphone activity is detected, resume after quiet, and are cancelled by recognized speech, switching, or hangup. The raw microphone activity gate remains active even when isolation adds input latency. Detection is not acoustic echo cancellation or a guarantee of detecting every quiet voice. Ordinary pending replies and the existing noise-duck behavior are preserved. No active call produces a clear refusal.
 
-## Opt-in MLX filter
+## Experimental opt-in MLX filter
 
 The bridge does **not** import MLX or load model weights. `isolation.py` starts `voice-isolate-worker` only via Apple's `/usr/bin/sandbox-exec` with the checked-in `isolator/worker.sb`. There is no unsandboxed or remote fallback. The worker has only PCM stdin/stdout, a minimal environment, no network/local sockets, and writes only in its trial folder. The profile is the tested Mac sandbox policy; it is not a Docker container. Inspect that policy for its precise allowed system/GPU access.
 
@@ -28,7 +28,7 @@ Prepare a private local directory containing:
 
 `isolator/build-existing.py --build DERIVED_DATA --output PRIVATE_TRIAL` links against an existing reviewed build without downloading or installing anything. It does not fetch model weights. Preserve dependency pins and notices; do not substitute arbitrary compiled objects. The bridge verifies the official weight checksum before **every** worker launch. It never calls the port's downloader or selects third-party converted weights. No binary/weights are bundled in this repository.
 
-Once the owner approves deployment, add `"isolator_folder": "/ABSOLUTE/PRIVATE_TRIAL"` to that bridge's private profile and restart the bridge only while idle. This is a path setting, not an enable flag. The filter starts off unless the private profile also sets `"isolation_default": true`; recording always starts off.
+Once the owner approves deployment, add `"isolator_folder": "/ABSOLUTE/PRIVATE_TRIAL"` to that bridge's private profile and restart the bridge only while idle. This is a path setting, not an enable flag. The experimental filter is off by default. Use `isolation on` to try it on a call. Setting `"isolation_default": true` is a separate explicit opt-in to experimental automatic startup, not a recommended default. Leave it false or absent for per-call opt-in; recording always starts off.
 
 ```sh
 python3 /PATH/voice.py --profile /PRIVATE/PROFILE isolation on

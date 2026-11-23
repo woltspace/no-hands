@@ -1,10 +1,10 @@
 # Recovery and private recording
 
-Apply bridge updates only while idle. Automatic isolation is an optional private-profile setting. Recording remains explicit opt-in per call.
+Apply bridge updates only while idle. Isolation is experimental and off by default; use `isolation on` to try it on a call. Recording remains explicit opt-in per call.
 
-## Isolation
+## Experimental opt-in isolation
 
-`isolation on` starts the sandboxed worker, warms synthetic kernels, then probes actual incoming audio while passing raw audio through. `status` distinguishes `warming`, `probing`, `armed`, `on`, `recovering`, `bypass`, and `off`. Only `on` means the filter is supplying audio. A100-frame timely run is required before first activation or re-entry. Recovery keeps raw audio flowing, never replays frames already forwarded raw, and preserves order/length. Lag stays bounded at300ms; at most three distinct recovery episodes may begin in a rolling five-minute window. A backlog restart within an existing episode does not count again. Each episode permits at most three worker restarts; persistent failure still latches raw bypass. Successful re-entry closes the episode. `isolation off` stops the worker; the private profile may set `isolation_default: true` to start warm-up automatically on each new call. Without that setting it starts off. Recording always starts off.
+`isolation on` starts the sandboxed worker, warms synthetic kernels, then probes actual incoming audio while passing raw audio through. `status` distinguishes `warming`, `probing`, `armed`, `on`, `recovering`, `bypass`, and `off`. Only `on` means the filter is supplying audio. A100-frame timely run is required before first activation or re-entry. Recovery keeps raw audio flowing, never replays frames already forwarded raw, and preserves order/length. Lag stays bounded at300ms; at most three distinct recovery episodes may begin in a rolling five-minute window. A backlog restart within an existing episode does not count again. Each episode permits at most three worker restarts; persistent failure still latches raw bypass. Successful re-entry closes the episode. `isolation off` stops the worker; an explicit experimental opt-in in the private profile may set `isolation_default: true` to start warm-up automatically on each new call. This is not a recommended default. Keep the setting false or absent for per-call opt-in. Recording always starts off.
 
 Metadata includes rolling push/frame latency p50/p95/max, in-progress delay and backlog at fallback. The model can still be unable to keep up with shared-GPU ASR/TTS. No ASR device, global priority, provider configuration or delay-budget increase is implied.
 

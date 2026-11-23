@@ -225,7 +225,7 @@ async def client(r,w):
 {text}
 [Live call: keep replies to one or two short sentences. Reply using stdin: python3 {Path(__file__).parent}/voice.py --profile {P} reply {ident}. Do not send through Telegram or Shellphone. Switching is available through the same CLI: switch NAME when the caller asks; clarify only ambiguous destinations. Music controls through the same CLI: music play URL, music off, music on, music next, music volume 0..100. All speech is sent to you; choose controls by intent, never assume a phrase was consumed. Run status to list participating Wolts. A switch ends this turn; do not reply afterwards.]
 [Recording: record on/off via the same CLI. Off each call; on queues a spoken start notice and starts only after it finishes. Check recording.state; arming is not recording. Files remain private on this Mac, never automatically shared.]
-[Unprompted speech: use the same CLI with say and text on stdin, from your routed session. It queues a short interruptible message only on this call, waits for caller silence, and is cancelled on switch/hangup or recognized interruption. Noise filter: isolation on/off; this profile may auto-start it each call; status shows warming/probing/on/recovering/bypass; only on means filtered audio. No model runs inside this bridge.]
+[Unprompted speech: use the same CLI with say and text on stdin, from your routed session. It queues a short interruptible message only on this call, waits for caller silence, and is cancelled on switch/hangup or recognized interruption. Experimental opt-in noise filter: isolation on to try it on this call, isolation off to stop; off by default unless this profile explicitly opts into automatic startup; status shows warming/probing/on/recovering/bypass; only on means filtered audio. No model runs inside this bridge.]
 [Call listening mode: {mode}. Use the same CLI with mode normal (AirPods/quiet) or mode car (WebRTC noise detector) when asked. Mode changes keep this turn, the call, Wolt and music; you may confirm with reply afterwards. These presets are experimental, not proven car tuning.]
 '''
    proc=await asyncio.create_subprocess_exec('woltspace','session','send',destination,'--key','linphone-'+ident,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.DEVNULL,stderr=asyncio.subprocess.DEVNULL)
@@ -391,6 +391,7 @@ async def control(reader,writer):
   result['call_mode']=MODE_CONTROL() if MODE_CONTROL else None
   result['call_id']=CALL_ID;result['isolation']=ISOLATION.status() if ISOLATION else None
   result['recording']=RECORDING.status() if RECORDING else None
+  result['isolation_experimental']=True
   result['isolation_default']=bool(SETTINGS.get('isolation_default',False))
   if EVENTS:
    result['call_log']=str(EVENTS.path);result['log_error']=EVENTS.error

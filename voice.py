@@ -24,7 +24,7 @@ def main():
  a=s.add_parser('mode');a.add_argument('name',choices=['normal','car'])
  a=s.add_parser('music');a.add_argument('mode',choices=['play','off','on','next','volume']);a.add_argument('value',nargs='?')
  a=s.add_parser('record');a.add_argument('name',choices=['on','off'])
- a=s.add_parser('isolation');a.add_argument('name',choices=['on','off'])
+ a=s.add_parser('isolation',help='experimental opt-in noise filter',description='Experimental noise filter, off by default. Use isolation on to try it on this call; isolation off stops it.');a.add_argument('name',choices=['on','off'])
  s.add_parser('say')
  a=s.add_parser('reply');a.add_argument('turn')
  a=p.parse_args();request=vars(a).copy();profile=request.pop('profile')
