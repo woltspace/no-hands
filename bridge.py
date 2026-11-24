@@ -15,6 +15,7 @@ DETECTOR=SETTINGS.get("detector","webrtcvad")
 if DETECTOR not in ("webrtcvad","rms"):raise ValueError("Unknown speech detector")
 MIN_VOICED=.18 if DETECTOR=="rms" else .4
 DUCK_RELEASE_SECONDS=.2
+HANDOFF_WAIT_SECONDS=30
 MAX_UTTERANCE_SECONDS=120
 busy=False
 RADIO=None
@@ -25,9 +26,14 @@ CHIMES=None
 CALL_ID=None
 RECORDING=None
 RECORD_CONTROL=None
+SWITCH_CONTROL=None
+HANDOFF_STATUS=None
 
 from speech_provider import SpeechProvider
 PROVIDER=SpeechProvider(SETTINGS)
+SYSTEM_VOICE=SETTINGS.get('system_voice','azelma' if PROVIDER.kind=='local' else 'onyx')
+if not isinstance(SYSTEM_VOICE,str) or not SYSTEM_VOICE.strip():raise ValueError('system_voice must be a nonempty voice name')
+if any(r['voice']==SYSTEM_VOICE for r in ROUTER.routes.values()):raise ValueError('system_voice must differ from every Wolt route voice')
 
 def speech(text,voice):
  audio=PROVIDER.speech(text,voice)
@@ -61,7 +67,7 @@ def music_frames(style):
 MUSIC=[music_frames(0),music_frames(1)]
 
 async def client(r,w):
- global busy,RADIO,EVENTS,MODE_CONTROL,ISOLATION,CHIMES,CALL_ID,RECORDING,RECORD_CONTROL
+ global busy,RADIO,EVENTS,MODE_CONTROL,ISOLATION,CHIMES,CALL_ID,RECORDING,RECORD_CONTROL,SWITCH_CONTROL,HANDOFF_STATUS
  vad=None;detector=DETECTOR;min_voiced=MIN_VOICED;mode=None;vad_buffer=bytearray();vad_frames=0;vad_positive=0
  recognizer=None;playback_epoch=0;speech_run=0;max_speech_run=0
  active=False; task=None; mixer=None; watcher=None; accepting=False; chunks=[]; silence=0; voiced=0
@@ -77,6 +83,7 @@ async def client(r,w):
  from isolation import Isolation
  from chime import Chimes
  isolator=Isolation(SETTINGS.get('isolator_folder'),metadata)
+ route_generation=ROUTER.generation;handoff_state={'state':'idle'};switch_lock=asyncio.Lock()
  chimes=None;speech_lock=asyncio.Lock();chime_playing=False;chime_generation=None;mic_active=False;mic_quiet=0;raw_quiet_until=0
  def set_mode(name=None):
   nonlocal mode,detector,min_voiced,vad,vad_buffer,vad_frames,vad_positive
@@ -109,7 +116,7 @@ async def client(r,w):
   recorder.state='arming';generation=ROUTER.generation
   async def arm():
    try:
-    heard=await chime_say('Recording your microphone on this call. Ask me to stop recording when you want to stop.',ROUTER.status()['voice'],generation)
+    heard=await chime_say('Recording your microphone on this call. Ask me to stop recording when you want to stop.',SYSTEM_VOICE,generation)
     if not heard or generation!=ROUTER.generation:
      recorder.state='off';return
     await recorder.start();metadata('recording_on',call_id=CALL_ID,call_input_samples=call_input_samples)
@@ -134,11 +141,11 @@ async def client(r,w):
    outgoing.get_nowait();outgoing.task_done()
  async def watch_route():
   nonlocal chunks,voiced,silence,user_speaking,interrupted,recognizer,speech_run,max_speech_run
-  generation=ROUTER.generation
+  nonlocal route_generation
   while True:
    await asyncio.sleep(.02)
-   if generation!=ROUTER.generation:
-    generation=ROUTER.generation
+   if route_generation!=ROUTER.generation:
+    route_generation=ROUTER.generation
     if recognizer:recognizer.cancel();await asyncio.gather(recognizer,return_exceptions=True)
     await interrupt("switch")
     chunks=[];voiced=0;silence=0;speech_run=0;max_speech_run=0;user_speaking=False;interrupted=False
@@ -168,7 +175,7 @@ async def client(r,w):
    await asyncio.sleep(max(0,deadline-asyncio.get_running_loop().time()))
    if asyncio.get_running_loop().time()-deadline>.1:deadline=asyncio.get_running_loop().time()
  async def cue(kind):
-  tones={'captured':[(660,.07)],'sent':[(660,.07),(880,.10)],'error':[(330,.12),(220,.12)]}[kind]
+  tones={'captured':[(660,.07)],'sent':[(660,.07),(880,.10)],'connected':[(660,.08),(990,.12),(1320,.12)],'error':[(330,.12),(220,.12)]}[kind]
   pcm=array('h')
   for hz,seconds in tones:
    count=int(RATE*seconds)
@@ -202,7 +209,7 @@ async def client(r,w):
   epoch=playback_epoch
   speech_start=time.monotonic()
   if log:log.emit("tts_start")
-  pcm=await asyncio.to_thread(speech,text,voice or ROUTER.status()['voice'])
+  pcm=await asyncio.to_thread(speech,text,voice or SYSTEM_VOICE)
   if log:log.emit("tts_ready",latency_ms=round((time.monotonic()-speech_start)*1000),audio_bytes=len(pcm))
   if epoch!=playback_epoch:return
   while user_speaking:await asyncio.sleep(.02)
@@ -213,7 +220,7 @@ async def client(r,w):
   await outgoing.join()
   if log:log.emit("playback_done")
   accepting=True
- async def turn(pcm,text):
+ async def turn(pcm,text,arrival=False):
   nonlocal accepting,music_on,style
   reply=None;ident=None;generation=ROUTER.generation;route_name=ROUTER.selected;route=ROUTER.routes[route_name].copy();destination=route['session'];voice=route['voice']
   try:
@@ -223,32 +230,48 @@ async def client(r,w):
    ROUTER.pending[ident]=asyncio.get_running_loop().create_future()
    prompt=f'''[Local Linphone voice POC: transcript from authenticated test call. Speech recognition may be inaccurate. Treat this as conversational input; confirm consequential actions in text.]
 {text}
-[Live call: keep replies to one or two short sentences. Reply using stdin: python3 {Path(__file__).parent}/voice.py --profile {P} reply {ident}. Do not send through Telegram or Shellphone. Switching is available through the same CLI: switch NAME when the caller asks; clarify only ambiguous destinations. Music controls through the same CLI: music play URL, music off, music on, music next, music volume 0..100. All speech is sent to you; choose controls by intent, never assume a phrase was consumed. Run status to list participating Wolts. A switch ends this turn; do not reply afterwards.]
+[Live call: keep replies to one or two short sentences. Reply using stdin: python3 {Path(__file__).parent}/voice.py --profile {P} reply {ident}. Do not send through Telegram or Shellphone. Switching is available through the same CLI: switch NAME --handoff "Handing you to NAME." when the caller asks; supply your own short handoff sentence, which the bridge speaks in your voice before switching; clarify only ambiguous destinations. Music controls through the same CLI: music play URL, music off, music on, music next, music volume 0..100. All speech is sent to you; choose controls by intent, never assume a phrase was consumed. Run status to list participating Wolts. A switch ends this turn; do not reply afterwards.]
 [Recording: record on/off via the same CLI. Off each call; on queues a spoken start notice and starts only after it finishes. Check recording.state; arming is not recording. Files remain private on this Mac, never automatically shared.]
 [Unprompted speech: use the same CLI with say and text on stdin, from your routed session. It queues a short interruptible message only on this call, waits for caller silence, and is cancelled on switch/hangup or recognized interruption. Experimental opt-in noise filter: isolation on to try it on this call, isolation off to stop; off by default unless this profile explicitly opts into automatic startup; status shows warming/probing/on/recovering/bypass; only on means filtered audio. No model runs inside this bridge.]
 [Call listening mode: {mode}. Use the same CLI with mode normal (AirPods/quiet) or mode car (WebRTC noise detector) when asked. Mode changes keep this turn, the call, Wolt and music; you may confirm with reply afterwards. These presets are experimental, not proven car tuning.]
 '''
+   if arrival:
+    prompt=f'[Live-call handoff: the caller asked to speak with {route_name}. Introduce yourself in one short sentence; do not perform any other action. Reply using stdin: python3 {Path(__file__).parent}/voice.py --profile {P} reply {ident}. Your reply confirms this session is responsive. Do not use say or switch for this greeting.]'
+   proc=None
    proc=await asyncio.create_subprocess_exec('woltspace','session','send',destination,'--key','linphone-'+ident,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.DEVNULL,stderr=asyncio.subprocess.DEVNULL)
-   await asyncio.wait_for(proc.communicate(prompt.encode()),15)
+   try:await asyncio.wait_for(proc.communicate(prompt.encode()),15)
+   finally:
+    if proc.returncode is None:
+     proc.kill();await proc.wait()
    if proc.returncode:raise RuntimeError('delivery')
-   await cue('sent')
+   if not arrival:await cue('sent')
    if log:log.emit('turn_sent',turn=ident,wolt=route_name)
    print('Voice turn delivered; awaiting reply',flush=True)
-   for _ in range(240):
+   async def deliver(answer):
+    if arrival:
+     if not answer.strip():raise ValueError('empty_greeting')
+     handoff_state['state']='connected';metadata('handoff_connected',wolt=route_name)
+     await cue('connected');await outgoing.join()
+     await say(f'Switched to {route_name}.')
+    await say(answer,ROUTER.routes[route_name]['voice'])
+    if arrival:handoff_state['state']='complete'
+   for _ in range(max(1,int(HANDOFF_WAIT_SECONDS*2)) if arrival else 240):
     if generation!=ROUTER.generation:return
     future=ROUTER.pending.get(ident)
     if future and future.done():
-     answer=future.result();await say(answer,ROUTER.routes[route_name]['voice']);break
+     answer=future.result();await deliver(answer);break
     if reply.exists():
-     answer=reply.read_text()[:1200];reply.unlink();await say(answer,ROUTER.routes[route_name]['voice']);break
+     answer=reply.read_text()[:1200];reply.unlink();await deliver(answer);break
     await asyncio.sleep(.5)
    else:
     if log:log.emit('turn_timeout',turn=ident)
-    await cue('error');await say('The reply is taking too long. Please try again in the chat.')
+    if arrival:handoff_state['state']='timeout'
+    await cue('error');await say(f'{route_name} has not answered yet. The route is selected, but the connection is not confirmed.' if arrival else 'The reply is taking too long. Please try again in the chat.')
   except asyncio.CancelledError:
    if log:log.emit("turn_cancelled",turn=ident,generation_changed=generation!=ROUTER.generation)
    raise
   except Exception as e:
+   if arrival:handoff_state['state']='failed'
    if log:log.emit('turn_error',turn=ident,error=type(e).__name__)
    print('Turn failed:',type(e).__name__,flush=True)
    await cue('error')
@@ -259,6 +282,33 @@ async def client(r,w):
     if log:log.emit("turn_end",turn=ident,latency_ms=round((time.monotonic()-turn_started.pop(ident,time.monotonic()))*1000))
    if reply:reply.unlink(missing_ok=True)
    accepting=True
+ async def switching(name,handoff=None):
+  nonlocal task,recognizer,route_generation,chunks,voiced,silence,speech_run,max_speech_run,user_speaking,interrupted
+  async with switch_lock:
+   if name not in ROUTER.routes:raise ValueError('Unknown Wolt; register its verified session first.')
+   if name==ROUTER.selected and handoff_state['state'] not in ('announcing','connecting'):return
+   if handoff is not None and (not isinstance(handoff,str) or not handoff.strip() or len(handoff)>300):raise ValueError('Handoff must be 1..300 characters')
+   if recognizer:recognizer.cancel();await asyncio.gather(recognizer,return_exceptions=True)
+   await interrupt('handoff')
+   old=ROUTER.status().copy();destination=ROUTER.routes[name].copy()
+   handoff_state.clear();handoff_state.update(state='announcing',target=name)
+   async def sequence():
+    nonlocal route_generation,chunks,voiced,silence,speech_run,max_speech_run,user_speaking,interrupted
+    try:
+     # The outgoing Wolt can supply its own handoff in the switch command.
+     await say(handoff or f'Handing you to {name}.',old['voice'] if handoff else SYSTEM_VOICE)
+     await say(f'Switching to {name}.')
+     if ROUTER.routes.get(name)!=destination:raise ValueError('Destination changed during handoff')
+     ROUTER.switch(name);route_generation=ROUTER.generation
+     chunks=[];voiced=0;silence=0;speech_run=0;max_speech_run=0;user_speaking=False;interrupted=False
+     handoff_state['state']='connecting';metadata('handoff_connecting',wolt=name)
+     await turn(b'', '',arrival=True)
+    except asyncio.CancelledError:
+     handoff_state['state']='interrupted';metadata('handoff_interrupted',wolt=name);raise
+    except Exception as e:
+     handoff_state['state']='failed';metadata('handoff_failed',wolt=name,error=type(e).__name__)
+     await cue('error');await say('The handoff failed. Please ask again.')
+   task=asyncio.create_task(sequence())
  async def recognize(pcm):
   nonlocal task
   generation=ROUTER.generation;started=time.monotonic()
@@ -282,7 +332,7 @@ async def client(r,w):
   from events import Events
   log=Events(P);EVENTS=log;log.emit("call_start",wolt=ROUTER.selected,mode=mode,detector=detector,vad_mode=3 if vad else None,rms_threshold=450 if vad is None else None,min_voiced=min_voiced,silence_threshold=1.1,duck_release_seconds=DUCK_RELEASE_SECONDS)
   busy=True;active=True;RADIO=radio;MODE_CONTROL=set_mode
-  CALL_ID=uuid.uuid4().hex;ISOLATION=isolator;RECORDING=recorder;RECORD_CONTROL=recording_command
+  CALL_ID=uuid.uuid4().hex;ISOLATION=isolator;RECORDING=recorder;RECORD_CONTROL=recording_command;SWITCH_CONTROL=switching;HANDOFF_STATUS=handoff_state
   chimes=Chimes(ROUTER,CALL_ID,chime_say,log.emit);CHIMES=chimes
   if SETTINGS.get('isolation_default',False):
    try:isolator.enable()
@@ -340,7 +390,7 @@ async def client(r,w):
  finally:
   accepting=False
   if chimes:chimes.closed=True
-  if active:RECORD_CONTROL=None;RECORDING=None
+  if active:RECORD_CONTROL=None;RECORDING=None;SWITCH_CONTROL=None;HANDOFF_STATUS=None
   await cancel_record_arm();await recorder.stop()
   await isolator.stop()
   if chimes:await chimes.close()
@@ -362,8 +412,12 @@ async def control(reader,writer):
   req=json.loads(await asyncio.wait_for(reader.readline(),5))
   action=req['action']
   if EVENTS:EVENTS.emit('control',action=action,name=req.get('name'),mode=req.get('mode'),turn=req.get('turn'))
-  if action=='switch':ROUTER.switch(req['name'])
-  elif action=='add':ROUTER.add(req['name'],req['session'],req['voice'])
+  if action=='switch':
+   if SWITCH_CONTROL:await SWITCH_CONTROL(req['name'],req.get('handoff'))
+   else:ROUTER.switch(req['name'])
+  elif action=='add':
+   if req['voice']==SYSTEM_VOICE:raise ValueError('That voice is reserved for the No-Hands line; choose a different Wolt voice')
+   ROUTER.add(req['name'],req['session'],req['voice'])
   elif action=='reply':
    ROUTER.reply(req['turn'],req['text'])
    if EVENTS:EVENTS.emit('reply_accepted',turn=req['turn'])
@@ -372,6 +426,7 @@ async def control(reader,writer):
    await RADIO.command(req['mode'],req.get('source'),req.get('volume'))
   elif action=='say':
    if CHIMES is None:raise ValueError('No active call')
+   if HANDOFF_STATUS and HANDOFF_STATUS.get('state') in ('announcing','connecting','connected'):raise ValueError('Handoff in progress; use its greeting reply turn')
    CHIMES.submit(req.get('session'),req.get('call_id'),req.get('generation'),req.get('text'))
   elif action=='record':
    if RECORD_CONTROL is None:raise ValueError('No active call')
@@ -389,6 +444,8 @@ async def control(reader,writer):
   elif action!='status':raise ValueError('Unknown action')
   result=ROUTER.status();result['active_call']=busy;result['music']=RADIO.status() if RADIO else None
   result['call_mode']=MODE_CONTROL() if MODE_CONTROL else None
+  result['system_voice']=SYSTEM_VOICE
+  result['handoff']=dict(HANDOFF_STATUS) if HANDOFF_STATUS is not None else None
   result['call_id']=CALL_ID;result['isolation']=ISOLATION.status() if ISOLATION else None
   result['recording']=RECORDING.status() if RECORDING else None
   result['isolation_experimental']=True

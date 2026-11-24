@@ -20,7 +20,7 @@ def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--profile',required=True)
  s=p.add_subparsers(dest='action',required=True);s.add_parser('status')
  a=s.add_parser('add');a.add_argument('name');a.add_argument('session');a.add_argument('--voice',required=True)
- a=s.add_parser('switch');a.add_argument('name')
+ a=s.add_parser('switch');a.add_argument('name');a.add_argument('--handoff',help='Short outgoing handoff sentence, spoken before switching')
  a=s.add_parser('mode');a.add_argument('name',choices=['normal','car'])
  a=s.add_parser('music');a.add_argument('mode',choices=['play','off','on','next','volume']);a.add_argument('value',nargs='?')
  a=s.add_parser('record');a.add_argument('name',choices=['on','off'])
