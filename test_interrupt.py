@@ -46,7 +46,9 @@ async def test():
  await asyncio.sleep(.4)
  assert sent and '\nstop\n' in sent[0], 'stop transcript must reach Wolt'
  assert max(received[-5:])<500,'old greeting never resumed; only quiet music'
- w.write(b'\0\0\0');await w.drain();w.close();await w.wait_closed();await reader;await asyncio.sleep(.05)
+ log=m.EVENTS
+ w.write(b'\0\0\0');await w.drain();w.close();await w.wait_closed();await reader
+ await asyncio.to_thread(log.worker.join,2)
  server.close();await server.wait_closed();assert not m.busy
  import json
  logs=list((p/'logs').glob('call-*.jsonl'));assert len(logs)==1

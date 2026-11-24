@@ -7,7 +7,7 @@
 1. **Ask your Wolt to install it.** Send: “Install the No-hands Woltspace app and guide me through setup: https://github.com/woltspace/no-hands”. Your Wolt starts with [the installation guide](AGENTS.md).
 2. **Get your phone ready.** Install [Linphone](https://www.linphone.org/) and [Tailscale](https://tailscale.com/download). Your Wolt helps connect your phone and Mac.
 3. **Scan your setup code.** Open No-hands in your lodge **on your Mac**. Start the phone, create a private QR, and scan it in Linphone.
-4. **Talk.** Dial **101** and say hello to your Wolt.
+4. **Talk.** Dial **101** for normal mode or **102** for car mode, and say hello to your Wolt. During a call, ask the Wolt to switch modes without hanging up. These are experimental presets; car audio still needs real-world validation.
 
 Choose **local speech** with a compatible voice server, or **OpenAI speech** with your own API key. With OpenAI, audio and reply text leave your Mac and API charges apply. Your Wolt explains the choice and handles configuration; you enter the key privately. All spoken voices are AI-generated.
 
@@ -21,3 +21,6 @@ You need a Mac running Woltspace and Docker Desktop. Keep it awake and Tailscale
 - [Development and validation](docs/development.md)
 
 [MIT license](LICENSE). Dependencies retain their [own licenses](THIRD_PARTY.md).
+
+Call extras: [experimental, opt-in MLX noise isolation and Wolt chime-in](docs/call-extras.md). Isolation is off by default; once prepared, use `isolation on` to try it on a call and `isolation off` to stop.
+Isolation is off by default and needs a separately prepared Mac worker; `say` allows the current call's Wolt to queue a short update without a pending turn. These features still require real-phone acceptance testing.

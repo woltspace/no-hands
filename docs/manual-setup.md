@@ -100,13 +100,17 @@ Keep the QR private. It contains access to your phone configuration. The provisi
 ## 4. Make your first call
 
 1. Dial **100** for an echo test. Speak and listen for your voice.
-2. Dial **101** for the Wolt. If Linphone requires an address, use `sip:101@MAC_TAILSCALE_IP`.
+2. Dial **101** for normal mode or **102** for car mode. If Linphone requires an address, use `sip:101@MAC_TAILSCALE_IP` (or `102`).
 3. Ask a short question, then pause roughly **1.1 seconds**.
 4. After Wi-Fi works, test cellular with Wi-Fi off and Tailscale still connected.
 
 A tick means audio was captured; a rising chime means the transcript was delivered to the Wolt, not that it finished. An error cue indicates a failure or timeout. Replies from a busy Wolt may be delayed.
 
-The detector requires 0.4 seconds of consecutive speech. Raw detection lowers reply volume to 20% rather than deleting it. An empty transcription preserves the pending answer; recognized new words supersede it. Speech recognition can still misinterpret background sound. No walk/drive profiles or automatic noise-floor adaptation are implemented yet.
+Normal mode uses the RMS detector with a 0.18-second playback threshold; car mode uses WebRTC with 0.4 seconds of consecutive speech. These are experimental starting presets, not verified device-specific tuning. Raw detection lowers reply volume to 20% rather than deleting it, releasing after 0.2 seconds of silence. Empty or hesitation-only transcription preserves the pending answer; meaningful new words supersede it. Speech recognition can still misinterpret background sound; there is no automatic noise-floor adaptation or neural noise suppressor.
+
+Ask the current Wolt to switch to car or normal mode during the call. It uses `voice.py --profile runtime/personal mode car` or `mode normal`, and can confirm in the same reply. Mode changes preserve the call, pending reply, route, music and queued audio, but reset unfinished microphone capture. They last for this call; redialing chooses the extension's mode again. Extension 100 remains the echo test.
+
+Existing private profiles are not silently rewritten: the original 101 handshake retains the profile's configured detector until an approved dialplan update installs the distinct 101/102 mode identifiers. The updated bridge still accepts the original handshake. Neither mode change requires restarting Asterisk once the updated bridge and dialplan are deployed.
 
 ## 5. Add another Wolt or control music
 

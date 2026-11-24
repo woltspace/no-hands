@@ -12,3 +12,16 @@ CHECKPOINT.json
 .buildx/
 
 .test-build/
+
+# Private opt-in call audio and sidecars
+recordings/
+
+# Private model assets and native build output
+*.safetensors
+*.wav
+*.mp3
+voice-isolate-worker
+*.bundle/
+module-cache/
+profile.json
+routes.json
