@@ -31,6 +31,9 @@ HANDOFF_STATUS=None
 
 from speech_provider import SpeechProvider
 PROVIDER=SpeechProvider(SETTINGS)
+SYSTEM_VOICE=SETTINGS.get('system_voice','azelma' if PROVIDER.kind=='local' else 'onyx')
+if not isinstance(SYSTEM_VOICE,str) or not SYSTEM_VOICE.strip():raise ValueError('system_voice must be a nonempty voice name')
+if any(r['voice']==SYSTEM_VOICE for r in ROUTER.routes.values()):raise ValueError('system_voice must differ from every Wolt route voice')
 
 def speech(text,voice):
  audio=PROVIDER.speech(text,voice)
@@ -113,7 +116,7 @@ async def client(r,w):
   recorder.state='arming';generation=ROUTER.generation
   async def arm():
    try:
-    heard=await chime_say('Recording your microphone on this call. Ask me to stop recording when you want to stop.',ROUTER.status()['voice'],generation)
+    heard=await chime_say('Recording your microphone on this call. Ask me to stop recording when you want to stop.',SYSTEM_VOICE,generation)
     if not heard or generation!=ROUTER.generation:
      recorder.state='off';return
     await recorder.start();metadata('recording_on',call_id=CALL_ID,call_input_samples=call_input_samples)
@@ -206,7 +209,7 @@ async def client(r,w):
   epoch=playback_epoch
   speech_start=time.monotonic()
   if log:log.emit("tts_start")
-  pcm=await asyncio.to_thread(speech,text,voice or ROUTER.status()['voice'])
+  pcm=await asyncio.to_thread(speech,text,voice or SYSTEM_VOICE)
   if log:log.emit("tts_ready",latency_ms=round((time.monotonic()-speech_start)*1000),audio_bytes=len(pcm))
   if epoch!=playback_epoch:return
   while user_speaking:await asyncio.sleep(.02)
@@ -249,7 +252,7 @@ async def client(r,w):
      if not answer.strip():raise ValueError('empty_greeting')
      handoff_state['state']='connected';metadata('handoff_connected',wolt=route_name)
      await cue('connected');await outgoing.join()
-     await say(f'Switched to {route_name}.',ROUTER.routes[route_name]['voice'])
+     await say(f'Switched to {route_name}.')
     await say(answer,ROUTER.routes[route_name]['voice'])
     if arrival:handoff_state['state']='complete'
    for _ in range(max(1,int(HANDOFF_WAIT_SECONDS*2)) if arrival else 240):
@@ -293,8 +296,8 @@ async def client(r,w):
     nonlocal route_generation,chunks,voiced,silence,speech_run,max_speech_run,user_speaking,interrupted
     try:
      # The outgoing Wolt can supply its own handoff in the switch command.
-     await say(handoff or f'Handing you to {name}.',old['voice'])
-     await say(f'Switching to {name}.',destination['voice'])
+     await say(handoff or f'Handing you to {name}.',old['voice'] if handoff else SYSTEM_VOICE)
+     await say(f'Switching to {name}.')
      if ROUTER.routes.get(name)!=destination:raise ValueError('Destination changed during handoff')
      ROUTER.switch(name);route_generation=ROUTER.generation
      chunks=[];voiced=0;silence=0;speech_run=0;max_speech_run=0;user_speaking=False;interrupted=False
@@ -412,7 +415,9 @@ async def control(reader,writer):
   if action=='switch':
    if SWITCH_CONTROL:await SWITCH_CONTROL(req['name'],req.get('handoff'))
    else:ROUTER.switch(req['name'])
-  elif action=='add':ROUTER.add(req['name'],req['session'],req['voice'])
+  elif action=='add':
+   if req['voice']==SYSTEM_VOICE:raise ValueError('That voice is reserved for the No-Hands line; choose a different Wolt voice')
+   ROUTER.add(req['name'],req['session'],req['voice'])
   elif action=='reply':
    ROUTER.reply(req['turn'],req['text'])
    if EVENTS:EVENTS.emit('reply_accepted',turn=req['turn'])
@@ -439,6 +444,7 @@ async def control(reader,writer):
   elif action!='status':raise ValueError('Unknown action')
   result=ROUTER.status();result['active_call']=busy;result['music']=RADIO.status() if RADIO else None
   result['call_mode']=MODE_CONTROL() if MODE_CONTROL else None
+  result['system_voice']=SYSTEM_VOICE
   result['handoff']=dict(HANDOFF_STATUS) if HANDOFF_STATUS is not None else None
   result['call_id']=CALL_ID;result['isolation']=ISOLATION.status() if ISOLATION else None
   result['recording']=RECORDING.status() if RECORDING else None
