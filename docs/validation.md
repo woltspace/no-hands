@@ -4,7 +4,7 @@
 
 A latency fallback followed by a backlog restart previously consumed two allowances for one episode. The adapter now counts an episode once until successful filtered re-entry. It permits three new episodes per rolling five minutes, with an independent maximum of three worker restarts within an episode. Exceeding either bound still latches raw bypass; it does not automatically resume after the rate window expires. Explicit off/on or a new call is needed after a latch (recent episode history is retained within a call). The 300 ms deadline is unchanged.
 
-Sixteen recovery fixtures pass in an offline, non-root, read-only Python 3.12 container. They include the duplicate transition, rolling-window expiry over simulated long calls, rate exhaustion, bounded crash loops, worker shutdown, and exact frame order across raw/filtered cutovers. Synthetic clocks are used for long-window tests, not ten-minute wall-clock runs. This accounting change has not been deployed or tested with the native model on a live call.
+Sixteen recovery fixtures pass in an offline, non-root, read-only Python 3.12 container. They include the duplicate transition, rolling-window expiry over simulated long calls, rate exhaustion, bounded crash loops, worker shutdown, and exact frame order across raw/filtered cutovers. Synthetic clocks are used for long-window tests, not ten-minute wall-clock runs. The accounting change is deployed; no native-model load rerun was performed for that revision.
 
 The combined targeted container invocation passed 100 tests (including inherited/repeated bridge fixtures): `test_recovery test_recording test_chime_bridge test_features test_call_modes test_noise_gate`. Providers and WebRTC imports were stubbed; the fixtures supply deterministic detector behavior. This is not a full dependency-installed suite or native VAD accuracy test.
 
@@ -14,8 +14,6 @@ The preceding recovery implementation used the same worker, official checksum-ve
 
 Warm-up/readiness took approximately 6.3–7 seconds. Sampled process RSS ranged approximately 226–500 MiB; it does not include all Metal/GPU allocations. These short runs did not reproduce the naturally occurring stalls. Live metadata subsequently showed rare stalls and the duplicate recovery accounting bug. Typical push latency around 18 ms does not exclude occasional scheduling, input-delivery or GPU stalls. ASR/TTS causation remains unproven; no GPU priority, speech-device or delay-budget change is included.
 
-## Transport and scope
-
-Earlier throwaway Asterisk fixtures reproduced a stock 5 ms partial-payload timeout. The patched reader survived split headers/payloads at 40, 150 and 300 ms and retained bounded abandoned reads and explicit hangup. The transport image change requires its own idle Asterisk deployment; updating the bridge alone does not apply it.
+## Scope
 
 The detector/provider fixtures are synthetic. They do not establish road-noise accuracy, echo cancellation, fresh-device onboarding, long-call thermals or reliable shared-GPU performance. Native load measurements above apply to the preceding recovery code, not a new validation of every line in this branch. Recording fixtures use synthetic PCM; real private recordings are not included. Repository changes do not deploy anything.
